@@ -1,0 +1,92 @@
+package com.michelboudreau.irc.enums
+{
+	/** IRC commands - must be string since not all are numeric **/
+	public class IRCCommands
+	{
+		// Server Commands
+		static public const PING:String = 'PING';
+		static public const FINGER:String = 'FINGER';
+		static public const VERSION:String = 'FINGER';
+		static public const TIME:String = 'FINGER';
+		
+		// Message Commands
+		static public const MESSAGE:String = 'PRIVMSG';
+		static public const USER_MODE:String = 'MODE';
+		
+		// Welcome Codes
+		static public const WELCOME:String = '001';
+		static public const HOST_SERVER:String = '002';
+		static public const HOST_CREATION:String = '003';
+		static public const HOST_INFO:String = '004';
+		static public const HOST_MODES:String = '005';
+		
+		// Stats
+		static public const CONNECTION_COUNT:String = '250';
+		static public const USERS:String = '251';
+		static public const OPS:String = '252';
+		static public const CONNECTIONS:String = '253';
+		static public const CHANNELS:String = '254';
+		static public const LOCAL_USERS:String = '265';
+		static public const GLOBAL_USERS:String = '266';
+		
+		// Message of the day
+		static public const MOTD_TITLE:String = '375';
+		static public const MOTD:String = '372';
+		static public const MOTD_END:String = '376';
+		
+		// Channel
+		static public const CHAN_TOPIC:String = '332';
+		static public const CHAN_INFO:String = '333';
+		static public const CHAN_USERS:String = '353';
+		static public const CHAN_USERS_END:String = '366';
+		static public const CHAN_USER_PART:String = 'PART';
+		static public const CHAN_USER_JOIN:String = 'JOIN';
+		static public const CHAN_USER_QUIT:String = 'QUIT';
+		
+		// Errors
+		static public const NO_SUCH_NICK:String = '401';
+		static public const NO_SUCH_SERVER:String = '402';
+		static public const NO_SUCH_CHANNEL:String = '403';
+		static public const CANNOT_SEND_TO_CHAN:String = '404';
+		static public const TOO_MANY_CHANNELS:String = '405';
+		static public const WAS_NO_SUCH_NICK:String = '406';
+		static public const TOO_MANY_TARGETS:String = '407';
+		static public const NO_ORIGIN:String = '409';
+		static public const NO_RECIPIENT:String = '411';
+		static public const NO_TEXT_TO_SEND:String = '412';
+		static public const NO_TOP_LEVEL:String = '413';
+		static public const WILD_TOP_LEVEL:String = '414';
+		static public const UNKNOWN_COMMAND:String = '421';
+		static public const NO_MOTD:String = '422';
+		static public const NO_ADMIN_INFO:String = '423';
+		static public const FILE_ERROR:String = '424';
+		static public const NO_NICKNAME_GIVEN:String = '431';
+		static public const ERROR_USER_NICKNAME:String = '432';
+		static public const NICKNAME_IN_USE:String = '433';
+		static public const NICK_COLLISION:String = '436';
+		static public const USER_NOT_IN_CHANNEL:String = '441';
+		static public const NOT_ON_CHANNEL:String = '442';
+		static public const USER_ON_CHANNEL:String = '443';
+		static public const NO_LOGIN:String = '444';
+		static public const SUMMON_DISABLED:String = '445';
+		static public const USERS_DISABLED:String = '446';
+		static public const NOT_REGISTERED:String = '451';
+		static public const NEED_MORE_PARAMS:String = '461';
+		static public const ALREADY_REGISTRED:String = '462';
+		static public const NO_PERM_FOR_HOST:String = '463';
+		static public const PASSWORD_MISMATCH:String = '464';
+		static public const YOURE_BANNED_CREEP:String = '465';
+		static public const KEY_SET:String = '467';
+		static public const CHANNEL_IS_FULL:String = '471';
+		static public const UNKNOWN_MODE:String = '472';
+		static public const INVITE_ONLY_CHAN:String = '473';
+		static public const BANNED_FROM_CHAN:String = '474';
+		static public const BAD_CHANNEL_KEY:String = '475';
+		static public const NO_PRIVILEGES:String = '481';
+		static public const CHAN_OP_PRIVS_NEEDED:String = '482';
+		static public const CANT_KILL_SERVER:String = '483';
+		static public const NO_OPER_HOST:String = '491';
+		static public const UMODE_UNKNOWN_FLAG:String = '501';
+		static public const USERS_DONT_MATCH:String = '502';
+	}
+}

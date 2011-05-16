@@ -1,0 +1,65 @@
+package com.michelboudreau.irc.models
+{
+	import com.michelboudreau.irc.events.MessageEvent;
+	import com.michelboudreau.irc.models.IRCDataModel;
+	import com.michelboudreau.irc.models.IRCLogModel;
+	import com.michelboudreau.irc.models.UserModel;
+	
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IEventDispatcher;
+	
+	import flashx.textLayout.conversion.ITextImporter;
+	import flashx.textLayout.conversion.TextConverter;
+	import flashx.textLayout.elements.TextFlow;
+	
+	import mx.collections.ArrayList;
+	import mx.utils.StringUtil;
+	
+	public class IRCLog extends EventDispatcher implements IIRCLog
+	{
+		protected var __log:ArrayList = new ArrayList();
+		
+		// Log read only property
+		[Bindable(event="logPropertyChanged")]
+		public function get log():ArrayList
+		{
+			return this._log;
+		}
+		
+		private function get _log():ArrayList
+		{
+			return this.__log;
+		}
+		
+		private function set _log(value:ArrayList):void
+		{
+			this.__log = value;
+			dispatchEvent(new Event("logPropertyChanged"));
+		}
+		
+		public function get name():String
+		{
+			return '';
+		}
+		
+		public function IRCLog(target:IEventDispatcher=null)
+		{
+			super(target);
+		}
+		
+		public function addLog(msg:String, ...params:Array):void
+		{
+			this._log.addItem(new IRCLogModel(convertText(msg, params)));
+		}
+		
+		private function convertText(msg:String, params:Array):String
+		{
+			//TODO: add logic to separate URLs with links
+			params.unshift(msg);
+			msg = StringUtil.substitute.apply(null, params);
+			return msg;
+			//return TextConverter.getImporter(TextConverter.TEXT_FIELD_HTML_FORMAT).importToFlow(msg);
+		}
+	}
+}

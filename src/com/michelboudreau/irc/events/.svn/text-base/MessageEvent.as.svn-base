@@ -1,0 +1,21 @@
+package com.michelboudreau.irc.events
+{
+	import com.michelboudreau.irc.models.IIRCLog;
+	import com.michelboudreau.irc.models.IRCChannel;
+	
+	import flash.events.Event;
+	
+	public class MessageEvent extends Event
+	{
+		static public const SUBMIT:String = 'submit';
+		public var text:String;
+		public var messageTarget:IIRCLog;
+		
+		public function MessageEvent(type:String, text:String, messageTarget:IIRCLog = null ,bubbles:Boolean=false, cancelable:Boolean=false)
+		{
+			super(type, bubbles, cancelable);
+			this.text = text;
+			this.messageTarget = messageTarget;
+		}
+	}
+}

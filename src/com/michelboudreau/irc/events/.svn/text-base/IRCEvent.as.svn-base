@@ -1,0 +1,32 @@
+package com.michelboudreau.irc.events
+{
+	import flash.events.Event;
+	
+	/**
+	 * the IrcEvent is the base class for the various IRC-related events in this package.
+	 */
+	public class IRCEvent extends Event
+	{
+		static public const SERVER_ADDED:String = 'serverAdded';
+		static public const SERVER_REMOVED:String = 'serverRemoved';
+		static public const SERVER_CONNECTING:String = 'serverConnecting';
+		static public const SERVER_CONNECTED:String = 'serverConnected';
+		static public const SERVER_DISCONNECTED:String = 'serverDisconnected';
+		static public const SERVER_STATUS:String = 'serverStatus';
+		static public const SERVER_QUIT:String = 'serverQuit';
+		static public const SERVER_JOIN_CHANNEL:String = 'serverJoinChannel';
+		static public const SERVER_PART_CHANNEL:String = 'serverPartChannel';
+		static public const SERVER_CREATE_CHAT:String = 'serverCreateChat';
+		static public const SERVER_REMOVE_CHAT:String = 'serverRemoveChat';
+		static public const SERVER_CHAT:String = 'serverChat';
+		
+		public var data:Object;
+		
+		public function IRCEvent(type:String, bubbles:Boolean=false, cancelable:Boolean=false, data:Object = null)
+		{
+			super(type, bubbles, cancelable);
+			this.data = data;
+		}
+		
+	}
+}

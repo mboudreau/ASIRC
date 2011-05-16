@@ -1,0 +1,233 @@
+package com.michelboudreau.irc.models
+{
+	import com.michelboudreau.irc.IRCSocket;
+	import com.michelboudreau.irc.enums.IRCCommands;
+	import com.michelboudreau.irc.enums.ServerStatus;
+	import com.michelboudreau.irc.events.IRCChannelEvent;
+	import com.michelboudreau.irc.events.IRCServerEvent;
+	import com.michelboudreau.irc.events.IRCSocketEvent;
+	import com.michelboudreau.irc.events.MessageEvent;
+	import com.michelboudreau.irc.models.ConnectionModel;
+	import com.michelboudreau.irc.models.IRCDataModel;
+	import com.michelboudreau.irc.models.UserModel;
+	
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IOErrorEvent;
+	import flash.events.ProgressEvent;
+	import flash.events.SecurityErrorEvent;
+	import flash.net.Socket;
+	import flash.utils.Dictionary;
+	
+	import flashx.textLayout.conversion.ITextImporter;
+	import flashx.textLayout.conversion.TextConverter;
+	import flashx.textLayout.elements.FlowElement;
+	import flashx.textLayout.elements.TextFlow;
+	
+	import mx.collections.ArrayCollection;
+	import mx.collections.ArrayList;
+	import mx.logging.ILogger;
+	import mx.logging.Log;
+	import mx.logging.LogEventLevel;
+	import mx.utils.StringUtil;
+	
+	// events
+	[Event(name='established', type='com.michelboudreau.irc.events.IRCServerEvent')]
+	[Event(name='status', type='com.michelboudreau.irc.events.IRCServerEvent')]
+	[Event(name='quit', type='com.michelboudreau.irc.events.IRCServerEvent')]
+	
+	[Bindable]
+	public class IRCServer extends IRCLog
+	{
+		protected const _logger:ILogger = Log.getLogger('IRCServer');
+		
+		protected var _parent:IRCSocket;
+		protected var _channelIds:Dictionary = new Dictionary();
+		protected var _chatIds:Dictionary = new Dictionary();
+		
+		// READ ONLY PROPERTIES
+		protected var __channels:ArrayList = new ArrayList();
+		protected var __chats:ArrayList = new ArrayList();
+		
+		[Bindable(event="namePropertyChanged")]
+		override public function get name():String
+		{
+			return this._parent.name;
+		}
+		
+		// Host read only
+		[Bindable(event="hostPropertyChanged")]
+		public function get host():String
+		{
+			return this._parent.host;
+		}
+		
+		// port read only
+		[Bindable(event="portPropertyChanged")]
+		public function get port():uint
+		{
+			return this._parent.port;
+		}
+		
+		// Channels read only property
+		[Bindable(event="channelsPropertyChanged")]
+		public function get channels():ArrayList
+		{
+			return this._channels;
+		}
+		
+		protected function get _channels():ArrayList
+		{
+			return this.__channels;
+		}
+		
+		protected function set _channels(value:ArrayList):void
+		{
+			this.__channels = value;
+			dispatchEvent(new Event("channelsPropertyChanged"));
+		}
+		
+		// Users read only property
+		[Bindable(event="chatsPropertyChanged")]
+		public function get chats():ArrayList
+		{
+			return this._chats;
+		}
+		
+		protected function get _chats():ArrayList
+		{
+			return this.__chats;
+		}
+		
+		protected function set _chats(value:ArrayList):void
+		{
+			this.__chats = value;
+			dispatchEvent(new Event("chatsPropertyChanged"));
+		}
+		
+		[Bindable(event="childrenPropertyChanged")]
+		public function get children():ArrayList
+		{
+			return new ArrayList(this._channels.source.concat(this._chats.source));
+		}
+		
+		// CONSTRUCTOR
+		public function IRCServer(parent:IRCSocket)
+		{
+			this._parent = parent;
+		}
+		
+		public function getChat(user:String):IRCChat
+		{
+			var chat:IRCChat;
+			
+			// find channel or create it
+			if(this._chatIds[user] == null)
+			{
+				chat = createChat(user);
+			}else{
+				chat = IRCChat(this._chatIds[user]);
+			}
+			
+			return chat;
+		}
+		
+		public function getChannel(name:String):IRCChannel
+		{
+			var channel:IRCChannel;
+			
+			// find channel or create it
+			if(this._channelIds[name] == null)
+			{
+				channel = createChannel(name);
+			}else{
+				channel = IRCChannel(this._channelIds[name]);
+			}
+			
+			return channel;
+		}
+		
+		protected function createChat(user:String):IRCChat
+		{
+			var chat:IRCChat;
+			// Check to see if already created
+			if(!this._chatIds[user] /*&& user != this._connectionInfo.nickname*/)
+			{
+				this._logger.info("Creating new chat with {0}", user);
+				chat = new IRCChat(user);
+				this._chats.addItem(chat);
+				this._chatIds[user] = chat;
+				
+				// Dispatch children change event for binding
+				this.dispatchEvent(new Event('childrenPropertyChanged'));
+				
+				// Chat creation event?
+				//this.dispatchEvent(new IRCServerEvent(IRCServerEvent.CREATE_CHAT, false, false, this));
+			}
+			return chat;
+		}
+		
+		protected function removeChat(user:String):IRCChat
+		{
+			var chat:IRCChat;
+			if(this._chatIds[user])
+			{
+				chat = this._chatIds[user];
+				
+				// Remove from dictionary
+				this._chatIds[user] = null;
+				delete this._chatIds[user];
+				
+				// remove from array
+				this._chats.removeItem(chat);
+				
+				//this.dispatchEvent(new IRCServerEvent(IRCServerEvent.REMOVE_CHAT, false, false, this));
+			}
+			
+			return chat;
+		}
+		
+		protected function createChannel(name:String):IRCChannel
+		{
+			var chan:IRCChannel;
+			// Check to see if already created
+			if(!this._channelIds[name])
+			{
+				this._logger.info("Creating new channel {0}", name);
+				chan = new IRCChannel(name);
+				this._channels.addItem(chan);
+				this._channelIds[name] = chan;
+				
+				// Dispatch event that will trigger binding of 'children' property
+				this.dispatchEvent(new Event("childrenPropertyChanged"));
+				
+				// Dispatch channel creation
+				//this.dispatchEvent(new IRCServerEvent(IRCServerEvent.JOIN_CHANNEL, false, false, this));
+			}
+			
+			return chan;
+		}
+		/*
+		protected function removeChannel(name:String):IRCChannel
+		{
+			var chan:IRCChannel;
+			
+			if(this._channelIds[name])
+			{
+				chan = this._channelIds[name];
+				
+				// Remove from dictionary
+				this._channelIds[name] = null;
+				delete this._channelIds[name];
+				
+				// remove from array
+				this._channels.removeItem(chan);
+				
+				// Dispatch part message
+				//partChannel(chan.name);
+			}
+			
+			return chan;
+		}*/
+	}
+}

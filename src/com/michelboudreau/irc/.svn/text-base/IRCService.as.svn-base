@@ -1,0 +1,223 @@
+package com.michelboudreau.irc
+{
+	import com.michelboudreau.irc.enums.ServerStatus;
+	import com.michelboudreau.irc.events.IRCEvent;
+	import com.michelboudreau.irc.events.IRCServerEvent;
+	import com.michelboudreau.irc.events.IRCSocketEvent;
+	import com.michelboudreau.irc.models.ConnectionModel;
+	import com.michelboudreau.irc.models.IRCServer;
+	import com.michelboudreau.irc.models.UserModel;
+	import com.michelboudreau.iterators.ArrayIterator;
+	import com.michelboudreau.iterators.Iterable;
+	
+	import flash.errors.IOError;
+	import flash.events.*;
+	import flash.net.Socket;
+	import flash.utils.ByteArray;
+	import flash.utils.Dictionary;
+	
+	import mx.collections.ArrayCollection;
+	import mx.collections.ArrayList;
+	import mx.controls.Alert;
+	import mx.core.IMXMLObject;
+	import mx.logging.ILogger;
+	import mx.logging.Log;
+	import mx.rpc.events.AbstractEvent;
+	import mx.utils.ObjectUtil;
+	
+	/* EVENTS */
+	[Event(name='serverAdded', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverRemoved', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverConnecting', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverConnected', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverEstablished', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverDisconnected', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverStatus', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverJoinChannel', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverPartChannel', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='serverChat', type='com.michelboudreau.irc.events.IRCEvent')]
+	[Event(name='error', type='com.michelboudreau.irc.events.IRCError')]
+	 
+	[Bindable]
+	public class IRCService extends EventDispatcher implements IMXMLObject
+	{
+		private const _logger:ILogger = Log.getLogger('IRCService');
+		
+		// PROPERTIES
+		protected var _networkIds:Dictionary = new Dictionary();
+		protected var _socketIds:Dictionary = new Dictionary();
+		protected var _info:ConnectionModel = new ConnectionModel();
+		
+		//  Read only properties
+		protected var __networks:ArrayList = new ArrayList();
+		
+		// GETTERS AND SETTERS
+		// Read only
+		[Bindable(event="networksPropertyChanged")]
+		public function get networks():ArrayList
+		{
+			return this._networks;
+		}
+		
+		// Internal Server prop
+		private function get _networks():ArrayList
+		{
+			return this.__networks;
+		}
+		
+		private function set _networks(value:ArrayList):void
+		{
+			this.__networks = value;
+			dispatchEvent(new Event("networksPropertyChanged"));
+		}
+
+		public function IRCService(){}
+		
+		// IMXMLObject init function.  Not used yet, but could be used to get parent document
+		public function initialized(document:Object, id:String):void {}
+		
+		//TODO: add user settings	
+		
+		// This only creates a socket to a network which handles the IRC protocol
+		public function connect(connectInfo:ConnectionModel, host:String, port:uint, hostName:String, hostPassword:String = null):IRCServer
+		{
+			var s:IRCServer;
+			// Check to see if server is already open
+			if(this._socketIds[host] == null)
+			{
+				// Create server object, 
+				var socket:IRCSocket = new IRCSocket(connectInfo, host, port, hostName, hostPassword);
+				s = socket.server;
+				this._networks.addItem(s);
+				this._networkIds[host] = s;
+				
+				// Add event listeners
+				/*s.addEventListener(IRCServerEvent.CONNECTING, onServerConnecting);
+				s.addEventListener(IRCServerEvent.CONNECTED, onServerConnected);
+				s.addEventListener(IRCServerEvent.DISCONNECTED, onServerDisconnected);
+				s.addEventListener(IRCServerEvent.QUIT, onServerQuit);
+				s.addEventListener(IRCServerEvent.JOIN_CHANNEL, onJoinChannel);
+				s.addEventListener(IRCServerEvent.PART_CHANNEL, onPartChannel);
+				s.addEventListener(IRCServerEvent.CREATE_CHAT, onCreateChat);
+				s.addEventListener(IRCServerEvent.REMOVE_CHAT, onRemoveChat);*/
+				// TODO: add chat event
+				//s.addEventListener(IRCServerEvent., onChat);
+				
+				// Dispatch event for adding server
+				this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_ADDED, false, false, s));
+			}else{
+				s = this._socketIds[host];
+			}
+			
+			// Dispatch error if already connected to server
+			return s;
+		}
+		
+		//TODO: have a way to remove sockets.  Must call destroy function on socket.
+		/*public function removeServer(server:IRCServer):void
+		{
+			if(this._serverIds[server.host] != null)
+			{
+				// get server
+				var s:IRCServer = this._serverIds[server.host];
+				
+				this._serverIds[server.host] = null;
+				delete this._serverIds[server.host];
+				
+				this._servers.removeItem(s);
+				
+				// Remove event handlers
+				s.removeEventListener(IRCServerEvent.CONNECTING, onServerConnecting);
+				s.removeEventListener(IRCServerEvent.CONNECTED, onServerConnected);
+				s.removeEventListener(IRCServerEvent.DISCONNECTED, onServerDisconnected);
+				s.removeEventListener(IRCServerEvent.QUIT, onServerQuit);
+				s.removeEventListener(IRCServerEvent.JOIN_CHANNEL, onJoinChannel);
+				s.removeEventListener(IRCServerEvent.PART_CHANNEL, onPartChannel);
+				s.removeEventListener(IRCServerEvent.CREATE_CHAT, onCreateChat);
+				s.removeEventListener(IRCServerEvent.REMOVE_CHAT, onRemoveChat);
+				
+				// Dispatch event for removing server
+				this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_REMOVED, false, false, s));
+				
+				// Quit the server.  The quit event will be dispatched and will remove server from list
+				s.quit();
+			}
+		}*/
+		
+		public function disconnect(host:String):void
+		{
+			/*if(this._serverIds[server] != null)
+			{
+				IRCServer(this._servers.getItemAt(this._serverIds[server])).disconnect();
+			}*/
+		}
+		
+		// SERVER HANDLERS
+		private function onServerConnecting(e:IRCServerEvent):void
+		{
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_CONNECTING, false, false, e.server));
+		}
+		
+		private function onServerConnected(e:IRCServerEvent):void
+		{
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_CONNECTED, false, false, e.server));
+		}
+		
+		private function onServerDisconnected(e:IRCServerEvent):void
+		{
+			// TODO: create server specific event
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_DISCONNECTED, false, false, e.server));
+		}
+		
+		private function onServerStatus(e:IRCServerEvent):void
+		{
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_STATUS, false, false, e.server));
+		}
+		
+		private function onServerQuit(e:IRCServerEvent):void
+		{
+			// Clean the listeners from the server
+			/*e.server.removeEventListener(IRCServerEvent.CONNECTING, onServerConnecting);
+			e.server.removeEventListener(IRCServerEvent.CONNECTED, onServerConnected);
+			e.server.removeEventListener(IRCServerEvent.DISCONNECTED, onServerDisconnected);
+			e.server.removeEventListener(IRCServerEvent.QUIT, onServerQuit);
+			e.server.removeEventListener(IRCServerEvent.JOIN_CHANNEL, onJoinChannel);
+			e.server.removeEventListener(IRCServerEvent.PART_CHANNEL, onPartChannel);*/
+			// TODO: add chat event
+			//e.server.removeEventListener(IRCServerEvent., onChat);
+			
+			// Remove server
+			/*this._networks.removeItemAt(this._serverIds[e.server.host]);
+			this._serverIds[e.server.host] = null;
+			delete this._serverIds[e.server.host];*/
+			
+			// redispatch the event
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_QUIT, false, false, e.server));
+		}
+		
+		private function onJoinChannel(e:IRCServerEvent):void
+		{
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_JOIN_CHANNEL, false, false, e.server));
+		}
+		
+		private function onPartChannel(e:IRCServerEvent):void
+		{
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_PART_CHANNEL, false, false, e.server));
+		}
+		
+		private function onCreateChat(e:IRCServerEvent):void
+		{
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_CREATE_CHAT, false, false, e.server));
+		}
+		
+		private function onRemoveChat(e:IRCServerEvent):void
+		{
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_REMOVE_CHAT, false, false, e.server));
+		}
+
+		private function onChat(e:IRCServerEvent):void
+		{
+			this.dispatchEvent(new IRCEvent(IRCEvent.SERVER_CHAT, false, false, e.server));
+		}
+	}
+}

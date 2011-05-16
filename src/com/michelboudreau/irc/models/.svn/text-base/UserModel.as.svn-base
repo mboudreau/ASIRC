@@ -1,0 +1,75 @@
+package com.michelboudreau.irc.models
+{
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	
+	import mx.collections.ArrayList;
+
+	[Bindable]
+	public class UserModel extends EventDispatcher
+	{
+		private var _name:String;
+		private var _isOp:Boolean;
+		private var _isVoice:Boolean;
+		
+		public function get name():String
+		{
+			return this._name;
+		}
+		
+		public function set name(value:String):void
+		{
+			switch(value.charAt(0))
+			{
+				case '@':
+					value = value.slice(1);
+					isOp = true;
+					break;
+				case '+':
+					value = value.slice(1);
+					isVoice = true;
+					break;
+			}
+			this._name = value;
+		}
+		
+		public function get isOp():Boolean
+		{
+			return this._isOp;
+		}
+		
+		public function set isOp(value:Boolean):void
+		{
+			this._isOp = value;
+			dispatchEvent(new Event("rankPropertyChanged"));
+		}
+		public function get isVoice():Boolean
+		{
+			return this._isVoice;
+		}
+		
+		public function set isVoice(value:Boolean):void
+		{
+			this._isVoice = value;
+			dispatchEvent(new Event("rankPropertyChanged"));
+		}
+		
+		[Bindable(event="rankPropertyChanged")]
+		public function get rank():uint
+		{
+			if(isOp)
+			{
+				return 2;
+			}else if(isVoice){
+				return 1;
+			}
+			
+			return 0;
+		}
+		
+		public function UserModel(name:String = null)
+		{
+			this.name = name;
+		}
+	}
+}

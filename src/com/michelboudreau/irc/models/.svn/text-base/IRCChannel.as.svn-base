@@ -1,0 +1,244 @@
+package com.michelboudreau.irc.models
+{
+	import com.michelboudreau.irc.enums.IRCCommands;
+	import com.michelboudreau.irc.models.IRCDataModel;
+	import com.michelboudreau.irc.models.UserModel;
+	
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.text.engine.TextElement;
+	
+	import flashx.textLayout.conversion.ITextImporter;
+	import flashx.textLayout.conversion.TextConverter;
+	import flashx.textLayout.elements.FlowElement;
+	import flashx.textLayout.elements.ParagraphElement;
+	import flashx.textLayout.elements.TextFlow;
+	
+	import mx.collections.ArrayCollection;
+	import mx.collections.ArrayList;
+	import mx.logging.ILogger;
+	import mx.logging.Log;
+	import mx.utils.StringUtil;
+	
+	import spark.utils.TextFlowUtil;
+
+	public class IRCChannel extends IRCLog
+	{
+		protected var __name:String;
+		protected var __topic:String;
+		protected var __topicSetBy:String;
+		protected var __topicDate:Date;
+		protected var __users:ArrayList = new ArrayList();
+				
+		// Name read only property
+		[Bindable(event="namePropertyChanged")]
+		override public function get name():String
+		{
+			return this._name;
+		}
+		
+		private function get _name():String
+		{
+			return this.__name;
+		}
+		
+		private function set _name(value:String):void
+		{
+			this.__name = value;
+			dispatchEvent(new Event("namePropertyChanged"));
+		}
+		
+		[Bindable(event="topicPropertyChanged")]
+		public function get topic():String
+		{
+			return this._topic;
+		}
+		
+		private function get _topic():String
+		{
+			return this.__topic;
+		}
+		
+		private function set _topic(value:String):void
+		{
+			this.__topic = value;
+			dispatchEvent(new Event("topicPropertyChanged"));
+		}
+		
+		[Bindable(event="topicSetByPropertyChanged")]
+		public function get topicSetBy():String
+		{
+			return this._topicSetBy;
+		}
+		
+		private function get _topicSetBy():String
+		{
+			return this.__topicSetBy;
+		}
+		
+		private function set _topicSetBy(value:String):void
+		{
+			this.__topicSetBy = value;
+			dispatchEvent(new Event("topicSetByPropertyChanged"));
+		}
+		
+		[Bindable(event="topicDatePropertyChanged")]
+		public function get topicDate():Date
+		{
+			return this._topicDate;
+		}
+		
+		private function get _topicDate():Date
+		{
+			return this.__topicDate;
+		}
+		
+		private function set _topicDate(value:Date):void
+		{
+			this.__topicDate = value;
+			dispatchEvent(new Event("topicDatePropertyChanged"));
+		}
+		
+		// Users read only property
+		[Bindable(event="usersPropertyChanged")]
+		public function get users():ArrayList
+		{
+			return this._users;
+		}
+		
+		private function get _users():ArrayList
+		{
+			return this.__users;
+		}
+		
+		private function set _users(value:ArrayList):void
+		{
+			this.__users = value;
+			dispatchEvent(new Event("usersPropertyChanged"));
+		}
+		
+		public function IRCChannel(name:String)
+		{
+			this._name = name;
+		}
+		
+		public function setTopic(value:String):void
+		{
+			// Do topic check
+			this._topic = value;
+			addLog("{0} topic: {1}", this._name, this._topic);
+		}
+		
+		public function setTopicInfo(setBy:String, date:Date):void
+		{
+			this.__topicSetBy = setBy;
+			this.__topicDate = date;
+			addLog("set by {0} on {1}", this.__topicSetBy, this._topicDate.toLocaleString());
+		}
+		
+		public function addUser(user:UserModel):uint
+		{
+			var sort:int;
+			for(var i:uint = 0, len:uint = this._users.length; i<len; i++)
+			{
+				sort = sortUser(user, UserModel(this._users.getItemAt(i)));
+				// If 1, continue, if -1 return previous index, if 0 insert
+				
+				if(sort == -1 || sort == 0)
+				{
+					i += 1 + sort;
+					break;
+				}
+			}
+			
+			// Add user at location
+			this._users.addItemAt(user, i);
+			return i;
+		}
+		
+		public function removeUser(user:UserModel):void
+		{
+			this._users.removeItem(user);
+		}
+		
+		public function removeUserByName(name:String):void
+		{
+			var user:UserModel = getUser(name);
+			if(user)
+			{
+				removeUser(user);
+			}
+		}
+		
+		public function setMode(target:String, mode:String, by:String):void
+		{
+			// Find action
+			var action:String = mode.charAt(0);
+			switch(action)
+			{
+				case '+':
+					action = 'gives';
+					break;
+				case '-':
+					action = 'removes';
+					break;
+			}
+			
+			// Find mode name
+			var modeName:String = mode.charAt(1);
+			switch(modeName)
+			{
+				case 'v':
+					modeName = 'voice';
+					break;
+				case 'i':
+					modeName = 'invisible';
+					break;
+				case 'o':
+					modeName = 'operator';
+					break;
+				//TODO: add more modes
+			}
+			addLog("{0} {1} {2} to {3}", by, action, modeName, target);
+		}
+								
+		public function getUser(name:String):UserModel
+		{
+			var user:UserModel;
+			
+			for each(user in this._users)
+			{
+				if(user.name == name)
+				{
+					return user;
+				}
+			}
+			
+			return user;
+		}				
+		
+		protected function sortUser(user1:UserModel, user2:UserModel):int
+		{
+			var num:Number;
+			switch(true)
+			{
+				case user1.rank > user2.rank:
+					num = -1;
+					break;
+				case user1.rank < user2.rank:
+					num = 1;
+					break;
+				case user1.rank == user2.rank:
+				default:
+					if(user1.name.toLowerCase() < user2.name.toLowerCase())
+					{
+						num = -1;
+					}else{
+						num = 1;
+					}
+					break;
+			}
+			return num;
+		}
+	}
+}

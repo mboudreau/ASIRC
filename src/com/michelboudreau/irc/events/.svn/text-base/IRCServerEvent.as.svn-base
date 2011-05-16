@@ -1,0 +1,34 @@
+package com.michelboudreau.irc.events
+{
+	import com.michelboudreau.irc.models.IRCServer;
+	
+	import flash.events.Event;
+
+	/**
+	 * The ServerEvent is an IrcEvent that pertains to global server related activity.
+	 * You should inspect the type property to extract the exact type of event
+	 * represented by a ServerEvent object.
+	 */
+	public class IRCServerEvent extends Event
+	{
+		static public const CONNECTING:String = 'serverConnecting';
+		static public const CONNECTED:String = 'serverConnected';
+		static public const DISCONNECTED:String = 'serverDisconnected';
+		static public const DATA:String = 'serverData';
+		static public const ERROR:String = 'serverError';
+		static public const QUIT:String = 'serverQuit';
+		static public const JOIN_CHANNEL:String = 'joinChannel';
+		static public const PART_CHANNEL:String = 'partChannel';
+		static public const SEND_MESSAGE:String = 'sendMessage';
+		static public const CREATE_CHAT:String = 'createChat';
+		static public const REMOVE_CHAT:String = 'removeChat';
+		
+		public var server:IRCServer;
+		
+		public function IRCServerEvent(type:String, bubbles:Boolean=false, cancelable:Boolean=false, server:IRCServer = null)
+		{
+			super(type, bubbles, cancelable);
+			this.server = server;
+		}
+	}
+}

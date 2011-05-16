@@ -1,0 +1,17 @@
+package com.michelboudreau.irc.models
+{
+	import flashx.textLayout.elements.TextFlow;
+
+	public class IRCLogModel
+	{
+		public var user:UserModel;
+		public var message:String;
+		public var time:Date = new Date();
+		
+		public function IRCLogModel(message:String, user:UserModel = null)
+		{
+			this.message = message;
+			this.user = user;
+		}
+	}
+}

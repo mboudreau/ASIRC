@@ -1,0 +1,780 @@
+package com.michelboudreau.irc
+{
+	import com.michelboudreau.irc.enums.IRCCommands;
+	import com.michelboudreau.irc.enums.ServerStatus;
+	import com.michelboudreau.irc.events.IRCServerEvent;
+	import com.michelboudreau.irc.events.IRCSocketEvent;
+	import com.michelboudreau.irc.events.MessageEvent;
+	import com.michelboudreau.irc.models.ConnectionModel;
+	import com.michelboudreau.irc.models.IIRCLog;
+	import com.michelboudreau.irc.models.IRCChannel;
+	import com.michelboudreau.irc.models.IRCChat;
+	import com.michelboudreau.irc.models.IRCDataModel;
+	import com.michelboudreau.irc.models.IRCServer;
+	import com.michelboudreau.irc.models.UserModel;
+	
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	import flash.events.IOErrorEvent;
+	import flash.events.ProgressEvent;
+	import flash.events.SecurityErrorEvent;
+	import flash.net.Socket;
+	import flash.utils.ByteArray;
+	import flash.utils.Dictionary;
+	
+	import mx.collections.ArrayList;
+	import mx.logging.ILogger;
+	import mx.logging.Log;
+	import mx.logging.LogEventLevel;
+	import mx.utils.StringUtil;
+	
+	[Event(name='connected', type='com.michelboudreau.irc.events.IRCSocketEvent')]
+	[Event(name='close', type='com.michelboudreau.irc.events.IRCSocketEvent')]
+	[Event(name='data', type='com.michelboudreau.irc.events.IRCSocketEvent')]
+	[Event(name='securityError', type='com.michelboudreau.irc.events.IRCSocketEvent')]
+	[Event(name='IOError', type='com.michelboudreau.irc.events.IRCSocketEvent')]
+	
+	//TODO: need to add more events for all event types (server, channel, chat)
+	//TODO: comment out every function, create ASDoc
+	
+	[Bindable]
+	public class IRCSocket extends EventDispatcher
+	{
+		private const _logger:ILogger = Log.getLogger('IRCSocket');
+		
+		protected var _password:String;
+		protected var _sendBuffer:Vector.<String> = new Vector.<String>();
+		
+		// Read only properties
+		protected var __name:String;
+		protected var __host:String;
+		protected var __port:uint;
+		protected var __server:IRCServer;
+		protected var __connectionInfo:ConnectionModel;
+		protected var __status:ServerStatus = ServerStatus.DISCONNECTED;
+		
+		// Making this private to stop anyone from sending directly to socket
+		private var _socket:Socket = new Socket();
+		private var _lineBuffer:String;
+		
+		[Bindable(event="namePropertyChanged")]
+		public function get name():String
+		{
+			if(this._name)
+			{
+				return this._name;
+			}else{
+				return this._host;
+			}
+		}
+		
+		protected function get _name():String
+		{
+			return this.__name;
+		}
+		
+		protected function set _name(value:String):void
+		{
+			this.__name = value;
+			dispatchEvent(new Event("namePropertyChanged"));
+		}
+		
+		// Host read only
+		[Bindable(event="hostPropertyChanged")]
+		public function get host():String
+		{
+			return this._host;
+		}
+		
+		protected function get _host():String
+		{
+			return this.__host;
+		}
+		
+		protected function set _host(value:String):void
+		{
+			this.__host = value;
+			dispatchEvent(new Event("hostPropertyChanged"));
+		}
+		
+		// port read only
+		[Bindable(event="portPropertyChanged")]
+		public function get port():uint
+		{
+			return this._port;
+		}
+		
+		protected function get _port():uint
+		{
+			return this.__port;
+		}
+		
+		protected function set _port(value:uint):void
+		{
+			this.__port = value;
+			dispatchEvent(new Event("portPropertyChanged"));
+		}
+		
+		// server read only
+		[Bindable(event="serverPropertyChanged")]
+		public function get server():IRCServer
+		{
+			return this._server;
+		}
+		
+		protected function get _server():IRCServer
+		{
+			return this.__server;
+		}
+		
+		protected function set _server(value:IRCServer):void
+		{
+			this.__server = value;
+			dispatchEvent(new Event("serverPropertyChanged"));
+		}
+		
+		// Status read only property
+		[Bindable(event="statusPropertyChanged")]
+		public function get status():ServerStatus
+		{
+			return this._status;
+		}
+		
+		protected function get _status():ServerStatus
+		{
+			return this.__status;
+		}
+		
+		protected function set _status(value:ServerStatus):void
+		{
+			this.__status = value;
+			dispatchEvent(new Event("statusPropertyChanged"));
+		}
+		
+		protected function get _connectionInfo():ConnectionModel
+		{
+			return this.__connectionInfo;
+		}
+		
+		protected function set _connectionInfo(value:ConnectionModel):void
+		{
+			this.__connectionInfo = value;
+			dispatchEvent(new Event("userPropertyChanged"));
+		}
+		
+		public function IRCSocket(info:ConnectionModel, host:String, port:uint, name:String = null, password:String = null)
+		{
+			// Save info
+			this._connectionInfo = info;
+			this._name = name;
+			this._host = host;
+			this._port = port;
+			this._password = password;
+			
+			// Create server model
+			this._server = new IRCServer(this);
+			
+			// Add socket listeners
+			this._socket.addEventListener(Event.CONNECT , onSocketConnect);				
+			this._socket.addEventListener(Event.CLOSE , onSocketClose);
+			this._socket.addEventListener(IOErrorEvent.IO_ERROR , onSocketIOError);
+			this._socket.addEventListener(SecurityErrorEvent.SECURITY_ERROR , onSocketSecurityError);
+			this._socket.addEventListener(ProgressEvent.SOCKET_DATA , onSocketData);
+		}
+		
+		public function destroy():void
+		{
+			this._socket.removeEventListener(Event.CONNECT , onSocketConnect);				
+			this._socket.removeEventListener(Event.CLOSE , onSocketClose);
+			this._socket.removeEventListener(IOErrorEvent.IO_ERROR , onSocketIOError);
+			this._socket.removeEventListener(SecurityErrorEvent.SECURITY_ERROR , onSocketSecurityError);
+			this._socket.removeEventListener(ProgressEvent.SOCKET_DATA , onSocketData);
+		}
+		
+		public function connect():void
+		{
+			this._status = ServerStatus.CONNECTING;
+			this._socket.connect(this._host, this._port);
+		}
+		
+		public function quit(reason:String = ""):void
+		{
+			if(this._status == ServerStatus.CONNECTED)
+			{
+				// Send quit message
+				send("QUIT :{0}", reason);
+				
+				// Dispatch event
+				//this.dispatchEvent(new IRCServerEvent(IRCServerEvent.QUIT, false, false, this));
+				
+				close();
+			}
+		}
+		
+		protected function close():void
+		{
+			// Close socket
+			this._socket.close();
+		}
+		
+		public function sendMessage(target:String, message:String):void
+		{
+			// Send info to server
+			send("PRIVMSG {0} :{1}", target, message);
+		}
+		
+		/**
+		 * Sends an action to the channel or to a user.
+		 *
+		 * @param target The name of the channel or user nick to send to.
+		 * @param action The action to send.
+		 * 
+		 */
+		//TODO: not sure about this one
+		public function sendAction(target:String, action:String):void 
+		{
+			sendCTCPCommand(target, "ACTION " + action);
+		}
+		
+		/**
+		 * Sends a notice to the channel or to a user.
+		 *
+		 * @param target The name of the channel or user nick to send to.
+		 * @param notice The notice to send.
+		 */
+		public function sendNotice(target:String, notice:String):void 
+		{
+			send("NOTICE {0} :{1}", target, notice);
+		}
+		
+		/**
+		 * Sends a CTCP command to a channel or user.  (Client to client protocol).
+		 * Examples of such commands are "PING <number>", "FINGER", "VERSION", etc.
+		 * For example, if you wish to request the version of a user called "Dave",
+		 * then you would call <code>sendCTCPCommand("Dave", "VERSION");</code>.
+		 * The type of response to such commands is largely dependant on the target
+		 * client software.
+		 *
+		 * @param target The name of the channel or user to send the CTCP message to.
+		 * @param command The CTCP command to send.
+		 */
+		public function sendCTCPCommand(target:String,  command:String):void 
+		{
+			// Wrapping command in special characters for server
+			command = "\u0001" + command + "\u0001";
+			sendMessage(target, command); // send as normal message
+		}
+		
+		/**
+		 * Attempt to change the current nick (nickname) of the bot when it
+		 * is connected to an IRC server.
+		 * After confirmation of a successful nick change, the getNick method
+		 * will return the new nick.
+		 *
+		 * @param newNick The new nick to use.
+		 */
+		public function setNick(nick:String):void 
+		{
+			send("NICK {0}", nick);
+		}
+		
+		/**
+		 * Set the mode of a channel.
+		 * This method attempts to set the mode of a channel.  This
+		 * may require the bot to have operator status on the channel.
+		 * For example, if the bot has operator status, we can grant
+		 * operator status to "Dave" on the #cs channel
+		 * by calling setMode("#cs", "+o Dave");
+		 * An alternative way of doing this would be to use the op method.
+		 * 
+		 * @param channel The channel on which to perform the mode change.
+		 * @param mode    The new mode to apply to the channel.  This may include
+		 *                zero or more arguments if necessary.
+		 * 
+		 * @see #op(String,String) op
+		 */
+		//TODO: not sure if I should make this public or keep protected and have all mode functions public
+		public function setMode(channel:String,  mode:String, extra:String = null):void 
+		{
+			send("MODE {0} {1} {2}", channel, mode, extra);
+		}
+		
+		/**
+		 * Sends an invitation to join a channel.  Some channels can be marked
+		 * as "invite-only", so it may be useful to allow a bot to invite people
+		 * into it.
+		 * 
+		 * @param nick    The nick of the user to invite
+		 * @param channel The channel you are inviting the user to join.
+		 * 
+		 */
+		public function sendInvite(nick:String, channel:String):void 
+		{
+			send("INVITE {0} :{1}", nick, channel);
+		}    
+		
+		/**
+		 * Bans a user from a channel.  An example of a valid hostmask is
+		 * "*!*compu@*.18hp.net".  This may be used in conjunction with the
+		 * kick method to permanently remove a user from a channel.
+		 * Successful use of this method may require the bot to have operator
+		 * status itself.
+		 * 
+		 * @param channel The channel to ban the user from.
+		 * @param hostmask A hostmask representing the user we're banning.
+		 */
+		// TODO: ban by nick, check for hostmask if not already stored in user model
+		public function ban(channel:String, hostmask:String):void 
+		{
+			this.setMode(channel, '+b', hostmask);
+		}
+		
+		/**
+		 * Unbans a user from a channel.  An example of a valid hostmask is
+		 * "*!*compu@*.18hp.net".
+		 * Successful use of this method may require the bot to have operator
+		 * status itself.
+		 * 
+		 * @param channel The channel to unban the user from.
+		 * @param hostmask A hostmask representing the user we're unbanning.
+		 */
+		public function unBan(channel:String, hostmask:String):void 
+		{
+			this.setMode(channel, '-b', hostmask);
+		}
+		
+		/**
+		 * Grants operator privilidges to a user on a channel.
+		 * Successful use of this method may require the bot to have operator
+		 * status itself.
+		 * 
+		 * @param channel The channel we're opping the user on.
+		 * @param nick The nick of the user we are opping.
+		 */
+		public function op(channel:String, nick:String):void 
+		{
+			this.setMode(channel, "+o", nick);
+		}
+		
+		/**
+		 * Removes operator privilidges from a user on a channel.
+		 * Successful use of this method may require the bot to have operator
+		 * status itself.
+		 * 
+		 * @param channel The channel we're deopping the user on.
+		 * @param nick The nick of the user we are deopping.
+		 */
+		public function deOp(channel:String, nick:String):void 
+		{
+			this.setMode(channel, "-o", nick);
+		}
+		
+		/**
+		 * Grants voice privilidges to a user on a channel.
+		 * Successful use of this method may require the bot to have operator
+		 * status itself.
+		 * 
+		 * @param channel The channel we're voicing the user on.
+		 * @param nick The nick of the user we are voicing.
+		 */
+		public function voice(channel:String, nick:String):void 
+		{
+			this.setMode(channel, "+v", nick);
+		}
+		
+		/**
+		 * Removes voice privilidges from a user on a channel.
+		 * Successful use of this method may require the bot to have operator
+		 * status itself.
+		 * 
+		 * @param channel The channel we're devoicing the user on.
+		 * @param nick The nick of the user we are devoicing.
+		 */
+		public function deVoice(channel:String, nick:String):void 
+		{
+			this.setMode(channel, "-v", nick);
+		}
+		
+		/**
+		 * Set the key for a channel.
+		 * This method attempts to set the key of a channel. 
+		 * 
+		 * @param channel The channel on which to perform the mode change.
+		 * @param key   The key for the channel.
+		 * 
+		 */
+		public function setChannelKey(channel:String, key:String):void 
+		{
+			this.setMode(channel, "+k", key);
+		}
+		
+		/**
+		 * Remove the key for a channel.
+		 * This method attempts to remove the key of a channel. 
+		 * 
+		 * @param channel The channel on which to perform the mode change.
+		 * @param key   The key for the channel.
+		 * 
+		 */
+		public function removeChannelKey(channel:String, key:String):void 
+		{
+			this.setMode(channel, "-k", key);
+		}
+		
+		/**
+		 * Set the topic for a channel.
+		 * This method attempts to set the topic of a channel.  This
+		 * may require the bot to have operator status if the topic
+		 * is protected.
+		 * 
+		 * @param channel The channel on which to perform the mode change.
+		 * @param topic   The new topic for the channel.
+		 * 
+		 */
+		public function setTopic(channel:String, topic:String):void 
+		{
+			send("TOPIC {0} :{1}", channel, topic);
+		}
+		
+		/**
+		 * Kicks a user from a channel, giving a reason.
+		 * This method attempts to kick a user from a channel and
+		 * may require the bot to have operator status in the channel.
+		 * 
+		 * @param channel The channel to kick the user from.
+		 * @param nick    The nick of the user to kick.
+		 * @param reason  A description of the reason for kicking a user.
+		 */
+		public function kick(channel:String, nick:String, reason:String = ''):void 
+		{
+			send("KICK {0} {1} :{2}", channel, nick, reason);
+		}
+		
+		/**
+		 * Issues a request for a list of all channels on the IRC server.
+		 * When the Irc Client receives information for each channel, it will
+		 * call the onChannelInfo method, which you will need to override
+		 * if you want it to do anything useful.
+		 *  <p>
+		 * Some IRC servers support certain parameters for LIST requests.
+		 * One example is a parameter of ">10" to list only those channels
+		 * that have more than 10 users in them.  Whether these parameters
+		 * are supported or not will depend on the IRC server software.
+		 * 
+		 * @param parameters The parameters to supply when requesting the
+		 *                   list.
+		 * 
+		 * @see #onChannelInfo(String,int,String) onChannelInfo
+		 */
+		public function listChannels(parameters:String = null):void
+		{
+			send("LIST {0}", parameters);
+		}
+		
+		protected function send(string:String, ...params:Array):void
+		{
+			// Check to see if there's parameters to replace
+			if(params && params.length > 0)
+			{
+				// substitute params into string
+				params.unshift(string);
+				string = StringUtil.substitute.apply(null, params);
+			}
+			
+			//TODO: maximum 510 characters total (plus line end)
+			if(this._socket.connected)
+			{
+				// trim string if there's extra spaces
+				//TODO: not sure about this
+				string = StringUtil.trim(string);
+				
+				//this._logger.debug('Sending: {0} - {1}', this._host, string);
+				var ba:ByteArray = new ByteArray();
+				ba.writeUTFBytes(string + ClientConstant.LINE_END);
+				this._socket.writeBytes(ba);
+				this._socket.flush();
+			}else{
+				//this._logger.warn("Server '{0}' currently not connected, storing for later", this._host);
+				this._sendBuffer.push(string);
+			}
+		}
+		
+		//TODO: set proper status throughout service, have functions check that status
+		protected function onSocketConnect(e:Event):void
+		{
+			// Set status
+			this._status = ServerStatus.HANDSHAKING;
+			
+			// Need to send user info right away
+			if(this._password)
+			{
+				send("PASS {0}", this._password);
+			}
+			
+			// Send user information to the server
+			this.setNick(this._connectionInfo.nickname);
+			send("USER {0} 8 * :{1}", this._connectionInfo.username, ClientConstant.CLIENT);
+			
+			// iterate through send buffer
+			while(this._sendBuffer.length > 0)
+			{
+				send(this._sendBuffer.shift());
+			}
+			
+			// Dispatch events to handle connection
+			dispatchEvent(new Event("connectedPropertyChanged")); 
+			dispatchEvent(new IRCSocketEvent(IRCSocketEvent.CONNECTED, false, false, {host:this._host, port:this._port}));
+		}
+		
+		protected function onSocketClose(e:Event):void
+		{
+			this._status = ServerStatus.DISCONNECTED;
+			
+			// Remove socket listeners
+			/*this._socket.removeEventListener(IRCSocketEvent.CONNECTED, onSocketConnected);
+			this._socket.removeEventListener(IRCSocketEvent.CLOSE, onSocketClose);
+			this._socket.removeEventListener(IRCSocketEvent.DATA, onSocketData);
+			this._socket.removeEventListener(IRCSocketEvent.IO_ERROR, onSocketIOError);
+			this._socket.removeEventListener(IRCSocketEvent.SECURITY_ERROR, onSocketSecurityError);
+			
+			// Iterate through chats & channels to remove listeners
+			var i:uint, len:uint;
+			for(i = 0, len = this._channels.length; i<len; i++)
+			{
+				removeChannel(this._channels.getItemAt(i).name);
+			}
+			
+			for(i = 0, len = this._chats.length; i<len; i++)
+			{
+				removeChat(this._chats.getItemAt(i).name);
+			}
+			
+			// Remove all channels
+			this._channels.removeAll();
+			this._channelIds = new Dictionary();
+			this._chats.removeAll();
+			this._chatIds = new Dictionary();*/
+			
+			dispatchEvent(new Event("connectedPropertyChanged"));
+			dispatchEvent(new IRCSocketEvent(IRCSocketEvent.CLOSE, false, false, {host:this._host, port:this._port}));
+		}
+		
+		protected function onSocketIOError(e:IOErrorEvent):void
+		{
+			dispatchEvent(new IRCSocketEvent(IRCSocketEvent.IO_ERROR, false, false, e));
+		}
+		
+		protected function onSocketSecurityError(e:SecurityErrorEvent):void
+		{
+			dispatchEvent(new IRCSocketEvent(IRCSocketEvent.SECURITY_ERROR, false, false, e));
+		}
+		
+		protected function onSocketData(e:ProgressEvent):void
+		{
+			var lines:Vector.<String> = read(); // read data
+			if(lines && lines.length > 0)
+			{
+				//this._logger.debug('**** SOCKET DATA ****\n {0} \n**** END SOCKET DATA ****', lines.toArray().join('\n'));
+				dispatchEvent(new IRCSocketEvent(IRCSocketEvent.DATA, false, false, lines));
+				
+				// handle lines
+				for(var i:uint = 0, len:uint = lines.length; i<len; i++)
+				{
+					// first parse the data into model, then handle the data
+					handleData(parseData(lines[i]));
+				}
+			}
+		}
+		
+		protected function read():Vector.<String>
+		{
+			// Check to see if any data is available
+			if(this._socket.bytesAvailable)
+			{
+				// Get line from socket
+				var line:String = this._socket.readUTFBytes(this._socket.bytesAvailable);
+				
+				// If line buffer isn't empty, append line
+				if(this._lineBuffer)
+				{
+					line = this._lineBuffer += line;
+				}
+				
+				// Check to see if line is complete (should end with a newline)
+				if(line.lastIndexOf(ClientConstant.LINE_END) == (line.length - 2))
+				{
+					this._lineBuffer = null; // clear buffer
+					line = StringUtil.trim(line); // remove end whitespace
+					return Vector.<String>.(line.split(LINE_END)); // Split strings into array on newline
+				}else{
+					this._lineBuffer = line;
+				}
+			}
+			return null;
+		}
+		
+		protected function parseData(line:String):IRCDataModel
+		{
+			var data:IRCDataModel = new IRCDataModel();
+			data.raw = line;
+			
+			// Split message from all other parts
+			var parts:Vector.<String> = Vector.<String>(line.split(' :'));
+			
+			// Get message
+			data.message = line.slice(parts[0].length + 2);
+			
+			// reduce line to just params
+			parts = Vector.<String>(parts[0].split(' '));
+			
+			// Find prefix is available as the first param, remove from stack
+			if(parts[0].charAt(0) == ':')
+			{
+				data.id = parts.shift().slice(1);
+			}
+			
+			// Get command
+			data.command = parts.shift();
+			
+			// save the rest of the params
+			data.params = parts;
+			
+			return data;
+		}
+		
+		protected function handleData(data:IRCDataModel):void
+		{
+			this._logger.debug(data.toString());
+			var chat:IRCChat;
+			var server:IRCServer;
+			var channel:IRCChannel;
+			var i:uint, len:uint, info:Array;
+			// Find the proper command
+			switch (data.command)
+			{
+				case IRCCommands.HOST_INFO:
+					//addLog(data.raw);
+					if (this._status == ServerStatus.HANDSHAKING)
+					{
+						this._status = ServerStatus.CONNECTED;
+						this.dispatchEvent(new IRCServerEvent(IRCServerEvent.CONNECTED, false, false, this._server));
+					}
+					break;
+				case IRCCommands.NICKNAME_IN_USE:
+					//addLog("* Nickname is currently in use");
+					var nick:String = this._connectionInfo.nextNickname();
+					if(nick)
+					{
+						setNick(nick);
+					}else{
+						//TODO: ask user for new nick
+					}
+					break;
+
+				case IRCCommands.CHAN_TOPIC:
+					this._server.getChannel(data.params[1]).setTopic(data.message);
+					break;
+				case IRCCommands.CHAN_INFO:
+					this._server.getChannel(data.params[1]).setTopicInfo(String(data.params[2]).split('!')[0], new Date(Number(data.params[3])*1000));
+					break;
+				case IRCCommands.CHAN_USERS:
+					channel = this._server.getChannel(data.params[2]);
+					var users:Array = data.message.split(' ');
+					for(i = 0, len = users.length; i<len; i++)
+					{
+						channel.addUser(new UserModel(users[i]));
+					}
+					break;
+				case IRCCommands.CHAN_USERS_END: // Do nothing - no real data
+					break;
+				case IRCCommands.CHAN_USER_JOIN:
+					if (data.id.split('!')[0] != this._connectionInfo.nickname)
+					{
+						channel = this._server.getChannel(data.message);
+						info = data.id.split('!');
+						channel.addUser(new UserModel(info[0]));
+						// Show message that user joined
+						channel.addLog("{0} ({1}) has joined", info[0], info[1]);
+					}
+					break;
+				case IRCCommands.CHAN_USER_PART:
+					if (data.id.split('!')[0] != this._connectionInfo.nickname)
+					{
+						channel = this._server.getChannel(data.params[0]);
+						info = data.id.split('!');
+						channel.removeUser(info[0]);
+						// Show message that user parted
+						channel.addLog("{0} ({1}) has left", info[0], info[1]);
+					}
+					break;
+				case IRCCommands.USER_MODE:
+					// Check to see if this is a server or channel mode
+					if (String(data.params[0]).indexOf('#') == 0)
+					{
+						this._server.getChannel(data.params[0]).setMode(data.params[2], data.params[1], data.id.split('!')[0]); // chan mode
+					}
+					else
+					{
+						// server mode
+						// TODO: set mode on user object
+					}
+					break;
+				case IRCCommands.MESSAGE:
+					// Check if it's a channel message or user pm
+					// starts with '#' = channel
+					if (String(data.params[0]).indexOf('#') == 0)
+					{
+						this._server.getChannel(data.params[0]).addLog("{0}: {1}", data.id.split('!')[0], data.message);
+					}
+					else
+					{
+						switch (data.message)
+						{
+							case "\u0001VERSION\u0001":
+								break;
+							case "\u0001PING\u0001":
+								break;
+							case "\u0001FINGER\u0001":
+								break;
+							case "\u0001TIME\u0001":
+								break;
+							default:
+								this._server.getChat(data.id.split('!')[0]).addLog("{0}: {1}", data.id.split('!')[0], data.message);
+								break;
+						}
+					}
+					break;
+				
+				case IRCCommands.PING:
+					//addLog(data.raw);
+					send('PONG :{0}', data.id);
+					break;
+				case IRCCommands.FINGER:
+					//addLog(data.raw);
+					send("NOTICE {0} :\u0001FINGER {1}\u0001", data.id, ClientConstant.CLIENT);
+					break;
+				case IRCCommands.VERSION:
+					//addLog(data.raw);
+					send("NOTICE {0} :\u0001VERSION {1}\u0001", data.id, ClientConstant.CLIENT);
+					break;
+				case IRCCommands.TIME:
+					//addLog(data.raw);
+					send("NOTICE {0} :\u0001TIME {1}\u0001", data.id, new Date().toLocaleString());
+					break;
+				default:
+					//super.handleLine(data);
+			}
+		}
+		
+		public function joinChannel(channel:String, key:String = null ):void
+		{
+			send("JOIN {0} {1}" , channel, key);
+		}
+		
+		public function partChannel(channel:String , reason:String = "" ):void
+		{
+			send("PART {0} : {1}", channel, reason);
+			//this.dispatchEvent(new IRCServerEvent(IRCServerEvent.PART_CHANNEL, false, false, this));
+		}
+	}
+}

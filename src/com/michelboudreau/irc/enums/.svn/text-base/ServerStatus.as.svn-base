@@ -1,0 +1,48 @@
+package com.michelboudreau.irc.enums
+{
+	public class ServerStatus
+	{
+		// The possible enums for this class
+		static public const CONNECTING:ServerStatus = new ServerStatus('connecting');
+		static public const HANDSHAKING:ServerStatus = new ServerStatus('handshaking');
+		static public const CONNECTED:ServerStatus = new ServerStatus('connected');
+		static public const DISCONNECTED:ServerStatus = new ServerStatus('disconnected');
+		
+		// A list of all the enums for easy referencing if needed
+		static public const list:Array = [CONNECTING, HANDSHAKING, CONNECTED, DISCONNECTED];
+		
+		// The static initializer needed to stop anyone else to an instance of this class
+		static private var INIT:Boolean = init();
+		
+		// Class vars
+		private var _name:String;
+		
+		// Class constructor
+		public function ServerStatus(name:String)
+		{
+			if(INIT)
+			{
+				throw new Error('Status enums already created');
+			}
+			this._name = name;
+		}
+		
+		// Returns the true weight of the class
+		public function valueOf():String
+		{
+			return this._name;
+		}
+		
+		// Returns a string when needed
+		public function toString():String
+		{
+			return this._name;
+		}
+		
+		// Static initializer function
+		static private function init():Boolean
+		{
+			return true;
+		}
+	}
+}

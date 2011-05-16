@@ -1,0 +1,36 @@
+package com.michelboudreau.irc.models
+{
+	[Bindable]
+	public class ConnectionModel
+	{
+		protected var _nicknameIndex:int = 0;
+		
+		public var nicknames:Array;
+		public var username:String = '';
+		public var name:String = '';
+		
+		public function get nickname():String
+		{
+			var nick:String;
+			if(nicknames && nicknames.length > 1 && nicknames[this._nicknameIndex])
+			{
+				nick = nicknames[this._nicknameIndex].toString();
+			}
+			return nick;
+		}
+		
+		public function ConnectionModel()
+		{
+		}
+		
+		public function nextNickname():String
+		{
+			var nick:String;
+			if(this._nicknameIndex < nicknames.length)
+			{
+				nick = nicknames[this._nicknameIndex++];
+			}
+			return nick;
+		}
+	}
+}

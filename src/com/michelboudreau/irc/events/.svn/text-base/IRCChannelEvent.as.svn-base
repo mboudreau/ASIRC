@@ -1,0 +1,25 @@
+package com.michelboudreau.irc.events
+{
+	import com.michelboudreau.irc.models.IRCChannel;
+	
+	import flash.events.Event;
+
+	/**
+	 * The ChannelEvent is an IrcEvent that pertains to Channel related activity.
+	 * You should inspect the type property to extract the exact type of event
+	 * represented by a ChannelEvent object.
+	 */
+	public class IRCChannelEvent extends Event
+	{
+		static public const JOIN:String = 'join';
+		static public const LEAVE:String = 'leave';
+		
+		public var channel:IRCChannel;
+		
+		public function IRCChannelEvent(type:String, bubbles:Boolean=false, cancelable:Boolean=false, channel:IRCChannel = null)
+		{
+			super(type, bubbles, cancelable);
+			this.channel = channel;
+		}		
+	}
+}

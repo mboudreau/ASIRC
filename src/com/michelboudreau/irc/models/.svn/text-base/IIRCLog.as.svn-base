@@ -1,0 +1,12 @@
+package com.michelboudreau.irc.models
+{
+	import com.michelboudreau.irc.models.IRCDataModel;
+	
+	import mx.collections.ArrayList;
+
+	public interface IIRCLog
+	{
+		function get log():ArrayList;
+		function get name():String;
+	}
+}

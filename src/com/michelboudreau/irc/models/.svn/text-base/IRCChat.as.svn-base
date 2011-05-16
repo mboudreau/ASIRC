@@ -1,0 +1,51 @@
+package com.michelboudreau.irc.models
+{
+	import com.michelboudreau.irc.enums.IRCCommands;
+	import com.michelboudreau.irc.models.IRCDataModel;
+	import com.michelboudreau.irc.models.UserModel;
+	
+	import flash.events.Event;
+	import flash.events.EventDispatcher;
+	
+	import flashx.textLayout.elements.TextFlow;
+	
+	import mx.collections.ArrayList;
+	
+	public class IRCChat extends IRCLog
+	{
+		protected var __user:UserModel;
+		
+		// Users read only property
+		[Bindable(event="userPropertyChanged")]
+		public function get user():UserModel
+		{
+			return this._user;
+		}
+		
+		private function get _user():UserModel
+		{
+			return this.__user;
+		}
+		
+		private function set _user(value:UserModel):void
+		{
+			this.__user = value;
+			dispatchEvent(new Event("userPropertyChanged"));
+		}
+		
+		[Bindable(event="userPropertyChanged")]
+		override public function get name():String
+		{
+			return this._user.name;
+		}
+		
+		public function IRCChat(name:String)
+		{
+			this._user = new UserModel(name);
+		}
+		public function remove():void
+		{
+			//server.removeChat(name);
+		}
+	}
+}
